@@ -9,3 +9,6 @@ __pycache__/
 # Generated files
 output/*
 !output/.gitkeep
+
+# Temp
+test_data/*
