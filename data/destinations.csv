@@ -1,0 +1,16 @@
+destination_id,origin,destination,approx_road_km,base_duration_minutes,coastal
+DST01,Madrid,Barcelona,630,480,true
+DST02,Madrid,Valencia,355,265,true
+DST03,Madrid,Seville,530,380,false
+DST04,Madrid,Malaga,535,450,true
+DST05,Madrid,Granada,420,330,false
+DST06,Madrid,Cordoba,400,300,false
+DST07,Madrid,Bilbao,400,340,true
+DST08,Madrid,San Sebastian,460,375,true
+DST09,Madrid,Zaragoza,320,250,false
+DST10,Madrid,Alicante,425,340,true
+DST11,Madrid,Murcia,400,330,false
+DST12,Madrid,Salamanca,215,175,false
+DST13,Madrid,Toledo,75,90,false
+DST14,Madrid,Santiago de Compostela,600,510,false
+DST15,Madrid,Cadiz,650,530,true
