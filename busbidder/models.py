@@ -79,9 +79,42 @@ class TravelRequest:
         self.require_changeable = require_changeable
 
 class TravellerProfile:
-    def __init__(self):
-        pass
+    """
+    Represents a traveller's preferences for ranking offers.
+
+    Attributes:
+        preferred_departure (str): The preferred departure time for the travel.
+        price_weight (float): The weight given to the price when ranking offers.
+        duration_weight (float): The weight given to the duration when ranking offers.
+        time_weight (float): The weight given to the departure time when ranking offers.
+        flexibility_weight (float): The weight given to the fare conditions when ranking offers.
+    """
+
+    def __init__(
+        self, preferred_departure: str, price_weight: float, duration_weight: float, time_weight: float, flexibility_weight: float):
+        self.preferred_departure = preferred_departure
+        self.price_weight = price_weight
+        self.duration_weight = duration_weight
+        self.time_weight = time_weight
+        self.flexibility_weight = flexibility_weight
 
 class Booking:
-    def __init__(self):
-        pass
+    """
+    Represents a booking made by a traveller.
+    Stores the price and fare conditions at the time of booking.
+
+    Attributes:
+        booking_reference (str): The unique reference for the booking.
+        offer_id (str): The ID of the offer that was booked.
+        booked_at (str): The date and time when the booking was made.
+        price_paid_eur (float): The price paid for the booking in Euros.
+        fare_conditions (FareConditions): The fare conditions of the booking.
+    """
+
+    def __init__(
+        self, booking_reference: str, offer_id: str, booked_at: str, price_paid_eur: float, fare_conditions: FareConditions):
+        self.booking_reference = booking_reference
+        self.offer_id = offer_id
+        self.booked_at = booked_at
+        self.price_paid_eur = price_paid_eur
+        self.fare_conditions = fare_conditions
