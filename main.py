@@ -13,10 +13,14 @@ from busbidder.cli import (
     choose_offer
 )
 
-Path("logs").mkdir(exist_ok=True)
+# Find the data and log folders relative to main.py
+project_folder = Path(__file__).resolve().parent
+data_folder = project_folder / "data"
+log_folder = project_folder / "logs"
+log_folder.mkdir(exist_ok=True)
 
 logging.basicConfig(
-    filename="logs/validation.log",
+    filename=log_folder / "busbidder.log",
     level=logging.INFO,
     format="%(levelname)s: %(message)s"
 )
@@ -26,7 +30,11 @@ logging.basicConfig(
 def main():
     # Load offers
     try:
-        offers = load_and_parse_offers(Path("data/offers.csv"))
+        offers = load_and_parse_offers(
+            data_folder / "offers.csv",
+            data_folder / "companies.csv",
+            data_folder / "destinations.csv"
+        )
 
     except (OSError, InvalidOfferError) as error:
         logging.error("Could not load offers: %s", error)
@@ -38,6 +46,7 @@ def main():
         return
 
     print("Welcome to BusBidder Spain!")
+    print("Loaded", len(offers), "offers")
 
     while True:
         print("\n--- Main Menu ---")
@@ -56,7 +65,10 @@ def main():
 
         # Load existing bookings
         try:
-            bookings = load_bookings()
+            bookings = load_bookings(
+                data_folder / "bookings.csv",
+                {offer.offer_id for offer in offers}
+            )
 
         except (OSError, BookingError) as error:
             print(f"Could not load bookings: {error}")
@@ -65,11 +77,16 @@ def main():
 
         # Get user requirements and preferences
         request = ask_travel_request(offers)
+
+        if request is None:
+            continue
+
         profile = ask_traveller_profile()
 
         # Filter and rank offers
         filtered = filter_offers(offers, request, bookings)
         ranked = rank_offers(filtered, profile)
+        logging.info("Search for %s: %s matching offers", request.destination, len(ranked))
 
         if not ranked:
             print("\nNo offers match your requirements.")
@@ -87,15 +104,21 @@ def main():
         if offer is None:
             continue
 
+        print(f"Selected: {offer.company_id} | {offer.offer_id} | €{offer.price_eur:.2f}")
+
         # Confirm booking
         if ask_yes_no("Confirm booking? (y/n): "):
             try:
-                booking = book_offer(offer)
+                booking = book_offer(offer, data_folder / "bookings.csv")
                 print("Booking confirmed:", booking.booking_reference)
+                print(f"Price: €{booking.price_paid_eur:.2f}")
 
             except (BookingError, OSError) as error:
                 print("Booking failed:", error)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        print("\nGoodbye!")

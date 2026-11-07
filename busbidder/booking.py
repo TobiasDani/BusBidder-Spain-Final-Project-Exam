@@ -3,6 +3,7 @@ import logging
 import math
 import re
 from datetime import datetime
+from functools import wraps
 
 from busbidder.models import Booking, FareConditions
 from busbidder.validation import parse_bool
@@ -13,20 +14,47 @@ class BookingError(ValueError):
     pass
 
 
+# Decorator: log each booking without repeating logging code inside book_offer
+# A decorator wraps a function with additional behavior. This is our metaprogramming example.
+def log_booking(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            booking = function(*args, **kwargs)
+            logging.info("Booking created: %s", booking.booking_reference)
+            return booking
+
+        except (BookingError, OSError) as error:
+            logging.error("Booking failed: %s", error)
+            raise
+
+    return wrapper
+
+
 # Load existing bookings from CSV
-def load_bookings(file_path="data/bookings.csv") -> list[Booking]:
-    """
-    Load and validate existing bookings.
-    """
+def load_bookings(file_path="data/bookings.csv", valid_offer_ids=None) -> list[Booking]:
+    """Load and validate existing bookings."""
 
     bookings = []
     references = set()
+    required_fields = (
+        "booking_reference", "offer_id", "booked_at", "price_paid_eur",
+        "changeable", "refundable", "luggage_kg"
+    )
 
     with open(file_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
 
+        if reader.fieldnames is None or (len(reader.fieldnames) != len(required_fields)
+                                        or set(reader.fieldnames) != set(required_fields)):
+            raise BookingError("Invalid bookings CSV header")
+
         for line_number, row in enumerate(reader, start=2):
             try:
+                if any(not isinstance(row.get(field), str) or not row[field].strip()
+                       for field in required_fields) or set(row) != set(required_fields):
+                    raise ValueError("Missing or unexpected booking fields")
+
                 reference = row['booking_reference']
 
                 if not re.fullmatch(r"BUS-[0-9]{4}[A-Z]", reference):
@@ -37,6 +65,9 @@ def load_bookings(file_path="data/bookings.csv") -> list[Booking]:
 
                 if not re.fullmatch(r"OFF-[0-9]{4}-[0-9]{4}", row['offer_id']):
                     raise ValueError("Invalid offer ID")
+
+                if valid_offer_ids is not None and row['offer_id'] not in valid_offer_ids:
+                    raise ValueError("Booking references an unknown offer")
 
                 datetime.fromisoformat(row['booked_at'])
 
@@ -72,9 +103,7 @@ def load_bookings(file_path="data/bookings.csv") -> list[Booking]:
 
 # Calculate remaining seats
 def get_available_seats(offer, bookings: list[Booking]) -> int:
-    """
-    Calculate available seats after existing bookings.
-    """
+    """Calculate available seats after existing bookings."""
 
     reserved = sum(
         1 for booking in bookings
@@ -85,11 +114,11 @@ def get_available_seats(offer, bookings: list[Booking]) -> int:
 
 
 # Book an offer and save it to CSV
+@log_booking
 def book_offer(offer, file_path="data/bookings.csv") -> Booking:
-    """
-    Create and save a booking if seats are available.
-    """
+    """Create and save a booking if seats are available."""
 
+    # Reload at booking time to avoid relying on an old seat count
     bookings = load_bookings(file_path)
 
     if get_available_seats(offer, bookings) <= 0:
@@ -97,15 +126,13 @@ def book_offer(offer, file_path="data/bookings.csv") -> Booking:
 
     # Generate a unique booking reference
     references = {booking.booking_reference for booking in bookings}
-    number = 1
 
-    while f"BUS-{number:04d}A" in references:
-        number += 1
-
-    if number > 9999:
+    for number in range(1, 10000):
+        reference = f"BUS-{number:04d}A"
+        if reference not in references:
+            break
+    else:
         raise BookingError("No booking references available")
-
-    reference = f"BUS-{number:04d}A"
 
     # Save a copy of the original fare conditions
     conditions = FareConditions(
@@ -135,7 +162,5 @@ def book_offer(offer, file_path="data/bookings.csv") -> Booking:
             booking.fare_conditions.refundable,
             booking.fare_conditions.luggage_kg
         ])
-
-    logging.info("Booking created: %s", reference)
 
     return booking

@@ -1,16 +1,20 @@
-from busbidder.models import Offer, TravelRequest
+from datetime import datetime
+from statistics import quantiles
+import math
+
+from busbidder.models import Offer, TravelRequest, TravellerProfile
 from busbidder.booking import get_available_seats
+from busbidder.validation import validate_travel_request, validate_traveller_profile
+
 
 # Filter offers based on the user's hard constraints
 def filter_offers(offers: list[Offer], request: TravelRequest, bookings: list) -> list[Offer]:
-    """
-    Return offers that meet all requirements of the travel request.
-    """
+    """Return offers that meet all requirements of the travel request."""
 
+    validate_travel_request(request)
     filtered_offers = []
 
-    # Loop through all offers and check if they meet the requirements of the travel request
-    # If an offer does not meet the requirements, it is rejected as it does not meet the hard constraints
+    # Reject offers that do not meet all hard constraints
     for offer in offers:
         if offer.destination != request.destination:
             continue
@@ -40,14 +44,36 @@ def filter_offers(offers: list[Offer], request: TravelRequest, bookings: list) -
 
     return filtered_offers
 
+
 # Normalize values to a scale from 0 to 100
-def normalize_scores(values: list[float], lower_is_better: bool = True) -> list[float]:
+def normalize_scores(
+    values: list[float], lower_is_better: bool = True,
+    limit_outliers: bool = False
+) -> list[float]:
     """
     Normalize values to scores between 0 and 100.
+    Optionally limit extreme values before Min-Max normalization.
     """
 
     if not values:
         return []
+
+    if any(not isinstance(value, (int, float)) or not math.isfinite(value)
+           for value in values):
+        raise ValueError("Scores must contain finite numbers")
+
+    values = list(values)
+
+    # Limit unusually high or low values using the IQR rule.
+    # This prevents a single very expensive ticket from flattening other prices.
+    if limit_outliers and len(values) >= 5:
+        q1, _, q3 = quantiles(values, n=4, method="inclusive")
+        spread = q3 - q1
+
+        if spread > 0:
+            lower = q1 - 1.5 * spread
+            upper = q3 + 1.5 * spread
+            values = [max(lower, min(value, upper)) for value in values]
 
     minimum = min(values)
     maximum = max(values)
@@ -68,28 +94,21 @@ def normalize_scores(values: list[float], lower_is_better: bool = True) -> list[
 
     return scores
 
-from datetime import datetime
-from busbidder.models import TravellerProfile
-
 
 # Calculate weighted scores for all offers
-def calculate_scores(offers: list[Offer], profile: TravellerProfile) -> list[dict]:
+def calculate_scores(
+    offers: list[Offer], profile: TravellerProfile,
+    limit_price_outliers: bool = True
+) -> list[dict]:
     """
     Calculate scores based on the traveller's preferences.
     Return each offer with its individual scores and total score.
     """
 
+    validate_traveller_profile(profile)
+
     if not offers:
         return []
-
-    # Validate weights
-    weights = [
-        profile.price_weight, profile.duration_weight,
-        profile.time_weight, profile.flexibility_weight
-    ]
-
-    if any(weight < 0 for weight in weights) or abs(sum(weights) - 1.0) > 0.000001:
-        raise ValueError("Weights must be non-negative and sum to 1")
 
     # Get prices and durations
     prices = [offer.price_eur for offer in offers]
@@ -116,8 +135,8 @@ def calculate_scores(offers: list[Offer], profile: TravellerProfile) -> list[dic
         )
         flexibility_scores.append(flexibility)
 
-    # Normalize scores to 0-100
-    price_scores = normalize_scores(prices)
+    # Normalize only the feasible offers, not the entire CSV file
+    price_scores = normalize_scores(prices, limit_outliers=limit_price_outliers)
     duration_scores = normalize_scores(durations)
     time_scores = normalize_scores(time_differences)
 
@@ -143,19 +162,21 @@ def calculate_scores(offers: list[Offer], profile: TravellerProfile) -> list[dic
 
     return results
 
-# Rank offers based on their weighted scores
-def rank_offers(offers: list[Offer], profile: TravellerProfile) -> list[dict]:
-    """
-    Rank offers from highest to lowest score.
-    """
 
-    scored_offers = calculate_scores(offers, profile)
+# Rank offers based on their weighted scores
+def rank_offers(
+    offers: list[Offer], profile: TravellerProfile,
+    limit_price_outliers: bool = True
+) -> list[dict]:
+    """Rank offers from highest to lowest score."""
+
+    scored_offers = calculate_scores(offers, profile, limit_price_outliers)
 
     # Sort by total score, then price and offer ID if scores are equal
     ranked_offers = sorted(
         scored_offers,
         key=lambda result: (
-            -result["total_score"],
+            -round(result["total_score"], 8),
             result["offer"].price_eur,
             result["offer"].offer_id
         )
@@ -163,15 +184,13 @@ def rank_offers(offers: list[Offer], profile: TravellerProfile) -> list[dict]:
 
     return ranked_offers
 
+
 # Explain why an offer was recommended
 def explain_recommendation(result: dict, profile: TravellerProfile) -> str:
-    """
-    Explain an offer's strengths and weaknesses based on its scores.
-    """
+    """Explain an offer's strengths and weaknesses based on its scores."""
 
     offer = result["offer"]
 
-    # Get the individual scores and their weights
     scores = {
         "price": result["price_score"],
         "duration": result["duration_score"],
@@ -186,20 +205,27 @@ def explain_recommendation(result: dict, profile: TravellerProfile) -> str:
         "flexibility": profile.flexibility_weight
     }
 
-    # Calculate how much each criterion contributes to the total
+    # Calculate each criterion's contribution to the total
     contributions = {
         name: score * weights[name]
         for name, score in scores.items()
     }
 
-    # Find the strongest contribution and weakest criterion
     strongest = max(contributions, key=contributions.get)
-    weakest = min(scores, key=scores.get)
+
+    # A zero-weight criterion should not be presented as a drawback
+    relevant = [name for name in scores if weights[name] > 0 and name != strongest]
+    if not relevant:
+        relevant = [name for name in scores if weights[name] > 0]
+
+    weakest = min(relevant, key=scores.get)
 
     return (
         f"Recommended: {offer.company_id} (€{offer.price_eur:.2f})\n"
         f"Total score: {result['total_score']:.2f}/100\n"
-        f"Strongest weighted contribution: {strongest}.\n"
-        f"Potential drawback: {weakest} "
-        f"(score: {scores[weakest]:.1f}/100)."
+        f"Strongest weighted contribution: {strongest} "
+        f"({contributions[strongest]:.1f} points).\n"
+        + (f"Potential drawback: {weakest} (score: {scores[weakest]:.1f}/100)."
+           if scores[weakest] < 100
+           else "Drawback: these scores only compare the currently available offers.")
     )
