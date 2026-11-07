@@ -1,73 +1,100 @@
 import logging
 from pathlib import Path
+
 from busbidder.data import load_and_parse_offers
 from busbidder.validation import InvalidOfferError
-from busbidder.models import TravelRequest, TravellerProfile
 from busbidder.ranking import filter_offers, rank_offers, explain_recommendation
 from busbidder.booking import load_bookings, book_offer, BookingError
+from busbidder.cli import (
+    ask_travel_request,
+    ask_traveller_profile,
+    ask_yes_no,
+    display_offers,
+    choose_offer
+)
 
 Path("logs").mkdir(exist_ok=True)
 
 logging.basicConfig(
     filename="logs/validation.log",
-    level=logging.WARNING,
+    level=logging.INFO,
     format="%(levelname)s: %(message)s"
 )
 
+
 # Main function
 def main():
-    # Load offers and existing bookings
+    # Load offers
     try:
         offers = load_and_parse_offers(Path("data/offers.csv"))
-        bookings = load_bookings()
-    except (OSError, InvalidOfferError, BookingError) as error:
-        logging.error("Could not load data: %s", error)
-        print(f"Could not load data: {error}")
+
+    except (OSError, InvalidOfferError) as error:
+        logging.error("Could not load offers: %s", error)
+        print(f"Could not load offers: {error}")
         return
 
-    print("Loaded", len(offers), "offers")
-
-    # Temporary travel request
-    request = TravelRequest(
-        "Malaga", "2027-07-12", "2027-07-14",
-        600, 3, 0, 2000, False
-    )
-
-    # Temporary traveller profile
-    profile = TravellerProfile(
-        "09:00", 0.60, 0.15, 0.10, 0.15
-    )
-
-    # Filter and rank offers
-    filtered = filter_offers(offers, request, bookings)
-    ranked = rank_offers(filtered, profile)
-
-    # Display the top 3 offers
-    print("Found", len(ranked), "matching offers")
-
-    for result in ranked[:3]:
-        offer = result["offer"]
-        print(
-            offer.company_id,
-            offer.price_eur,
-            round(result["total_score"], 2)
-        )
-
-    if not ranked:
-        print("No offers match your requirements.")
+    if not offers:
+        print("No valid offers available.")
         return
 
-    # Explain the top recommendation
-    print("\n" + explain_recommendation(ranked[0], profile))
+    print("Welcome to BusBidder Spain!")
 
-    # Book the top offer if the user wants to
-    if input("\nBook the top offer? (y/n): ").strip().lower() == "y":
+    while True:
+        print("\n--- Main Menu ---")
+        print("1. Search for buses")
+        print("2. Exit")
+
+        choice = input("Choose option: ").strip()
+
+        if choice == "2":
+            print("Goodbye!")
+            break
+
+        if choice != "1":
+            print("Invalid option.")
+            continue
+
+        # Load existing bookings
         try:
-            booking = book_offer(ranked[0]["offer"])
-            print("Booking confirmed:", booking.booking_reference)
+            bookings = load_bookings()
 
-        except (BookingError, OSError) as error:
-            print("Booking failed:", error)
+        except (OSError, BookingError) as error:
+            print(f"Could not load bookings: {error}")
+            logging.error("Could not load bookings: %s", error)
+            return
+
+        # Get user requirements and preferences
+        request = ask_travel_request(offers)
+        profile = ask_traveller_profile()
+
+        # Filter and rank offers
+        filtered = filter_offers(offers, request, bookings)
+        ranked = rank_offers(filtered, profile)
+
+        if not ranked:
+            print("\nNo offers match your requirements.")
+            continue
+
+        # Display ranked offers
+        display_offers(ranked, bookings)
+
+        # Explain the top recommendation
+        print("\n" + explain_recommendation(ranked[0], profile))
+
+        # Let the user select an offer
+        offer = choose_offer(ranked)
+
+        if offer is None:
+            continue
+
+        # Confirm booking
+        if ask_yes_no("Confirm booking? (y/n): "):
+            try:
+                booking = book_offer(offer)
+                print("Booking confirmed:", booking.booking_reference)
+
+            except (BookingError, OSError) as error:
+                print("Booking failed:", error)
 
 
 if __name__ == "__main__":
