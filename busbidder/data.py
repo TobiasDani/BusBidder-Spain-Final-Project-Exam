@@ -1,10 +1,11 @@
 import csv
-from busbidder.models import Offer
-from busbidder.models import FareConditions
+from busbidder.models import Offer, FareConditions
 
+# Load offers from a CSV file
 def load_offers(file_path):
     offers = []
 
+    # Turn the CSV file into a list of dictionaries
     with open(file_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
 
@@ -13,16 +14,20 @@ def load_offers(file_path):
 
     return offers
 
+# Parse the loaded offers into Offer and FareConditions objects
 def parse_offers(loaded_offers):
     parsed_offers = []
 
+    # Transform the list of dictionaries into a list of Offer objects
     for offer in loaded_offers:
+        # Create a FareConditions object for each offer
         fare_condition = FareConditions(
             luggage_kg=int(offer['luggage_kg']),
             changeable=offer['changeable'].lower(),
             refundable=offer['refundable'].lower()
         )
 
+        # Create an Offer object for each offer, including the FareConditions object
         parsed_offers.append(Offer(
             offer_id=offer['offer_id'],
             company_id=offer['company_id'],
@@ -42,6 +47,7 @@ def parse_offers(loaded_offers):
 
     return parsed_offers
 
+# Load and parse offers from a CSV file and return a list of Offer objects
 def load_and_parse_offers(file_path):
     offers = load_offers(file_path)
     parsed_offers = parse_offers(offers)
