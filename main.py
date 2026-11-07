@@ -1,6 +1,7 @@
 from pathlib import Path
 from busbidder.data import load_and_parse_offers
 
+# Main function
 def main():
     offers = load_and_parse_offers(Path("data/offers.csv"))
 

@@ -1,7 +1,13 @@
+class FareConditions:
+    def __init__(self, luggage_kg: int, changeable: str, refundable: str):
+        self.luggage_kg = luggage_kg
+        self.changeable = changeable
+        self.refundable = refundable
+
 class Offer:
     def __init__(
-        self, offer_id, company_id, origin, destination, travel_date, departure_time, arrival_date, 
-        arrival_time, duration_minutes, price_eur, transfers, seats_available, rating, fare_conditions):
+        self, offer_id: str, company_id: str, origin: str, destination: str, travel_date: str, departure_time: str, arrival_date: str, 
+        arrival_time: str, duration_minutes: int, price_eur: float, transfers: int, seats_available: int, rating: float, fare_conditions: FareConditions):
         
         self.offer_id = offer_id
         self.company_id = company_id
@@ -18,12 +24,6 @@ class Offer:
         self.rating = rating
 
         self.fare_conditions = fare_conditions
-
-class FareConditions:
-    def __init__(self, luggage_kg, changeable, refundable):
-        self.luggage_kg = luggage_kg
-        self.changeable = changeable
-        self.refundable = refundable
 
 class TravelRequests:
     def __init__(self):
