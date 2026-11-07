@@ -15,7 +15,7 @@ class BookingError(ValueError):
 
 
 # Decorator: log each booking without repeating logging code inside book_offer
-# A decorator wraps a function with additional behavior. This is our metaprogramming example.
+# A decorator wraps a function with additional behavior. This is our metaprogramming example
 def log_booking(function):
     @wraps(function)
     def wrapper(*args, **kwargs):

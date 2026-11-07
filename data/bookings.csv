@@ -1,5 +1,0 @@
-booking_reference,offer_id,booked_at,price_paid_eur,changeable,refundable,luggage_kg
-BUS-0001A,OFF-2027-0081,2026-11-07T21:07:58,26.9,False,False,15
-BUS-0002A,OFF-2027-0081,2026-11-07T21:08:12,26.9,False,False,15
-BUS-0003A,OFF-2027-0081,2026-11-07T21:15:09,26.9,False,False,15
-BUS-0004A,OFF-2027-0081,2026-11-07T21:15:26,26.9,False,False,15

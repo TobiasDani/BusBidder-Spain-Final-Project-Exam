@@ -64,8 +64,8 @@ def normalize_scores(
 
     values = list(values)
 
-    # Limit unusually high or low values using the IQR rule.
-    # This prevents a single very expensive ticket from flattening other prices.
+    # Limit unusually high or low values using the IQR rule
+    # This prevents a single very expensive ticket from flattening other prices
     if limit_outliers and len(values) >= 5:
         q1, _, q3 = quantiles(values, n=4, method="inclusive")
         spread = q3 - q1
