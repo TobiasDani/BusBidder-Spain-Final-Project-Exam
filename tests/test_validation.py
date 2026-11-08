@@ -2,7 +2,7 @@ import csv
 import unittest
 from pathlib import Path
 
-from busbidder.data import _parse_offers
+from busbidder.data import _parse_offers, load_and_parse_offers
 from busbidder.models import TravelRequest, TravellerProfile
 from busbidder.validation import (
     InvalidOfferError, validate_offer_row,
@@ -101,6 +101,15 @@ class TestValidation(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             validate_traveller_profile(profile)
+
+    def test_missing_csv_file(self):
+        # Missing files should raise an error instead of returning empty data
+        with self.assertRaises(FileNotFoundError):
+            load_and_parse_offers(
+                DATA / "missing_offers.csv",
+                DATA / "companies.csv",
+                DATA / "destinations.csv"
+            )
 
 
 if __name__ == "__main__":
